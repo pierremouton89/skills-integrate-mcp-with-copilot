@@ -4,6 +4,111 @@ document.addEventListener("DOMContentLoaded", () => {
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
 
+  // ── Auth UI elements ────────────────────────────────────────────────────────
+  const userIconBtn = document.getElementById("user-icon-btn");
+  const userDropdown = document.getElementById("user-dropdown");
+  const loggedOutPanel = document.getElementById("logged-out-panel");
+  const loggedInPanel = document.getElementById("logged-in-panel");
+  const loggedInName = document.getElementById("logged-in-name");
+  const openLoginBtn = document.getElementById("open-login-btn");
+  const logoutBtn = document.getElementById("logout-btn");
+  const loginModal = document.getElementById("login-modal");
+  const loginForm = document.getElementById("login-form");
+  const loginError = document.getElementById("login-error");
+  const cancelLoginBtn = document.getElementById("cancel-login-btn");
+
+  let isLoggedIn = false;
+
+  // Toggle teacher dropdown
+  userIconBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    userDropdown.classList.toggle("hidden");
+  });
+
+  // Close dropdown when clicking elsewhere
+  document.addEventListener("click", () => userDropdown.classList.add("hidden"));
+
+  // Open login modal
+  openLoginBtn.addEventListener("click", () => {
+    userDropdown.classList.add("hidden");
+    loginModal.classList.remove("hidden");
+    document.getElementById("login-username").focus();
+  });
+
+  // Close login modal
+  cancelLoginBtn.addEventListener("click", () => {
+    loginModal.classList.add("hidden");
+    loginForm.reset();
+    loginError.classList.add("hidden");
+  });
+
+  loginModal.addEventListener("click", (e) => {
+    if (e.target === loginModal) {
+      loginModal.classList.add("hidden");
+      loginForm.reset();
+      loginError.classList.add("hidden");
+    }
+  });
+
+  // Login form submit
+  loginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    loginError.classList.add("hidden");
+    const username = document.getElementById("login-username").value;
+    const password = document.getElementById("login-password").value;
+    try {
+      const res = await fetch("/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        loginModal.classList.add("hidden");
+        loginForm.reset();
+        setAuthState(true, data.username);
+      } else {
+        loginError.textContent = data.detail || "Login failed";
+        loginError.classList.remove("hidden");
+      }
+    } catch {
+      loginError.textContent = "Network error. Please try again.";
+      loginError.classList.remove("hidden");
+    }
+  });
+
+  // Logout button
+  logoutBtn.addEventListener("click", async () => {
+    userDropdown.classList.add("hidden");
+    await fetch("/logout", { method: "POST" });
+    setAuthState(false, null);
+  });
+
+  function setAuthState(loggedIn, username) {
+    isLoggedIn = loggedIn;
+    if (loggedIn) {
+      loggedOutPanel.classList.add("hidden");
+      loggedInPanel.classList.remove("hidden");
+      loggedInName.textContent = username;
+      signupForm.closest("section").classList.remove("hidden");
+    } else {
+      loggedOutPanel.classList.remove("hidden");
+      loggedInPanel.classList.add("hidden");
+      loggedInName.textContent = "";
+      signupForm.closest("section").classList.add("hidden");
+    }
+    // Re-render activities list to show/hide delete buttons
+    fetchActivities();
+  }
+
+  // Check session on page load
+  async function checkAuth() {
+    const res = await fetch("/me");
+    const data = await res.json();
+    setAuthState(data.logged_in, data.username);
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
   // Function to fetch activities from API
   async function fetchActivities() {
     try {
@@ -30,7 +135,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${details.participants
                   .map(
                     (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
+                      `<li><span class="participant-email">${email}</span>${
+                        isLoggedIn
+                          ? `<button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button>`
+                          : ""
+                      }</li>`
                   )
                   .join("")}
               </ul>
@@ -156,5 +265,5 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Initialize app
-  fetchActivities();
+  checkAuth();
 });
